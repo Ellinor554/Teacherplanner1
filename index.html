@@ -39,11 +39,43 @@
         .img-resize-handle { position: absolute; bottom: -5px; right: -5px; width: 12px; height: 12px; background: #a6857e; border-radius: 2px; cursor: se-resize; }
         #sb-plan { position: relative; }
         .toolbar-btn { display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid #e5e3df; background: white; color: #aaa; cursor: pointer; transition: all 0.15s; flex-shrink: 0; }
+        .size-slider { -webkit-appearance: none; appearance: none; background: transparent; outline: none; cursor: pointer; max-width: 3.5rem; padding: 0; flex-shrink: 0; }
+        .size-slider::-webkit-slider-runnable-track { height: 3px; background: #555; border-radius: 2px; }
+        .size-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 12px; border-radius: 6px; background: #C8B49A; border: none; cursor: pointer; margin-top: -4.5px; }
+        .size-slider::-moz-range-track { height: 3px; background: #555; border-radius: 2px; border: none; }
+        .size-slider::-moz-range-thumb { width: 20px; height: 12px; border-radius: 6px; background: #C8B49A; border: none; cursor: pointer; }
         .toolbar-btn:hover { border-color: #a6857e; color: #a6857e; }
         .toolbar-btn.active { background: #a6857e; border-color: #a6857e; color: white; }
+        .notes-modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); }
+        .notes-modal.hidden { display: none; }
+        .notes-modal-content { background: white; border-radius: 16px; padding: 24px; width: 480px; max-width: 95vw; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .private-notes-area { width: 100%; min-height: 200px; resize: vertical; border: 1px solid #e5e3df; border-radius: 8px; padding: 12px; font-size: 13px; outline: none; font-family: 'Inter', sans-serif; color: #444; background: #fdfcfb; }
+        .private-notes-area:focus { border-color: #a6857e; background: white; }
 
 #toolbar-toggle-btn {
     box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+/* Sidebar toggle */
+#lesson-sidebar {
+    transition: width 0.35s ease, opacity 0.35s ease, padding-right 0.35s ease;
+    min-width: 0;
+    overflow: hidden;
+}
+#view-day-detail.sidebar-hidden #lesson-sidebar {
+    width: 0;
+    opacity: 0;
+    padding-right: 0;
+    pointer-events: none;
+}
+#show-sidebar-btn {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+#view-day-detail.sidebar-hidden #show-sidebar-btn {
+    opacity: 1;
+    pointer-events: auto;
 }
     </style>
 </head>
@@ -73,7 +105,7 @@
             <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4" id="future-weeks-grid"></div>
         </div>
         <div id="view-day-detail" class="hidden flex flex-row gap-8 h-full overflow-hidden">
-            <div class="w-1/3 flex flex-col overflow-y-auto pr-4 custom-scrollbar">
+            <div id="lesson-sidebar" class="w-1/3 flex flex-col overflow-y-auto pr-4 custom-scrollbar">
                 <div id="active-tool-container" class="hidden-tool card p-5 mb-6 border-[#a6857e]/20">
                     <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
                         <h3 id="tool-title" class="font-bold text-[#a6857e] uppercase text-xs tracking-widest">Verktyg</h3>
@@ -86,7 +118,10 @@
                         <h2 id="detail-day-name" class="text-4xl font-bold italic serif-title">Måndag</h2>
                         <p id="detail-date" class="text-gray-500 text-sm font-medium"></p>
                     </div>
-                    <button onclick="addLessonPrompt()" class="bg-[#9eb19a] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-[#8da089] transition-all transform hover:scale-105">+ Ny lektion</button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="addLessonPrompt()" class="bg-[#9eb19a] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-[#8da089] transition-all transform hover:scale-105">+ Ny lektion</button>
+                        <button onclick="toggleSidebar()" title="Dölj sidopanel" class="bg-[#c8b49a] text-white px-3 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-[#b8a48a] transition-all transform hover:scale-105">◀ Dölj</button>
+                    </div>
                 </div>
                 <div id="detail-lesson-list" class="space-y-4 pb-20"></div>
             </div>
@@ -97,6 +132,7 @@
                             <h3 id="sb-subject" class="text-6xl font-bold mb-2 text-[#a6857e] tracking-tight">Välj en lektion</h3>
                             <p id="sb-time" class="text-2xl text-gray-300 italic"></p>
                         </div>
+                        <button id="show-sidebar-btn" onclick="toggleSidebar()" title="Visa sidopanel" class="bg-[#c8b49a] text-white px-3 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-[#b8a48a] transition-all transform hover:scale-105">▶ Visa</button>
                     </div>
                     <div id="sb-columns" class="flex gap-6 min-h-[500px]">
                         <div id="sb-plan" class="flex-1 outline-none min-h-[500px] whitespace-pre-wrap pb-32 text-gray-700 relative" contenteditable="true" oninput="handleInput()" onpaste="handlePaste(event)" placeholder="Skriv din planering här..."></div>
@@ -108,14 +144,15 @@
                 <div class="border-t border-gray-100 bg-[#faf9f8] px-6 py-3 flex items-center gap-3">
                     <!-- Text formatting -->
                     <button onclick="document.execCommand('bold')" title="Fet (Ctrl+B)" id="bold-btn" class="toolbar-btn w-7 h-7 font-bold text-sm">B</button>
-                    <button onclick="document.execCommand('italic')" title="Kursiv (Ctrl+I)" id="italic-btn" class="toolbar-btn w-7 h-7 italic text-sm">I</button>
+                    <button onclick="document.execCommand('italic')" title="Kursiv (Ctrl+I)" id="italic-btn" class="toolbar-btn w-7 h-7 text-sm">/</button>
+                    <button onclick="toggleNotesModal()" title="Privata lektionsanteckningar" id="notes-btn" class="toolbar-btn w-7 h-7 text-base">📝</button>
                     <div class="w-px h-5 bg-gray-200 mx-1"></div>
                     <!-- Font size -->
-                    <input type="range" min="16" max="80" value="32" title="Textstorlek" class="w-24 accent-[#a6857e] cursor-pointer opacity-40 hover:opacity-100 transition-opacity" oninput="updateFontSize(this.value)">
+                    <input type="range" min="16" max="80" value="32" title="Textstorlek" class="w-14 size-slider" oninput="updateFontSize(this.value)">
                     <div class="w-px h-5 bg-gray-200 mx-1"></div>
                     <!-- Image -->
                     <button onclick="document.getElementById('image-upload').click()" title="Lägg till bild" class="toolbar-btn w-7 h-7 text-base">🖼</button>
-                    <input type="file" id="image-upload" accept="image/*" class="hidden" onchange="insertImageFromFile(this)">
+                    <input type="file" id="image-upload" accept="image/*" class="hidden" style="display:none" onchange="insertImageFromFile(this)">
                     <!-- Split -->
                     <button id="split-btn" onclick="toggleSplit()" title="Dela i två kolumner" class="toolbar-btn w-7 h-7 text-xs">⬜⬜</button>
                     <div class="flex-1"></div>
@@ -132,6 +169,7 @@
         <button onclick="openTool('multiplication')" class="flex items-center gap-3 bg-white border border-gray-200 px-6 py-3 rounded-xl text-sm font-semibold hover:border-[#a6857e] hover:text-[#a6857e] transition-all shadow-sm"><span class="text-lg">×</span> Multiplikation</button>
         <button onclick="openTool('fractions')" class="flex items-center gap-3 bg-white border border-gray-200 px-6 py-3 rounded-xl text-sm font-semibold hover:border-[#a6857e] hover:text-[#a6857e] transition-all shadow-sm"><span class="text-lg">📏</span> Bråkplank</button>
         <button onclick="openTool('timer')" class="flex items-center gap-3 bg-white border border-gray-200 px-6 py-3 rounded-xl text-sm font-semibold hover:border-[#a6857e] hover:text-[#a6857e] transition-all shadow-sm"><span class="text-lg">⏱️</span> Time Timer</button>
+        <button onclick="openTool('stopwatch')" class="flex items-center gap-3 bg-white border border-gray-200 px-6 py-3 rounded-xl text-sm font-semibold hover:border-[#a6857e] hover:text-[#a6857e] transition-all shadow-sm"><span class="text-lg">⏱️</span> Stoppur</button>
     </div>
 
     <div class="flex-1"></div>
@@ -161,6 +199,24 @@
         class="fixed bottom-6 right-6 w-14 h-14 bg-white rounded-3xl shadow-2xl border border-gray-200 flex items-center justify-center text-3xl z-[100] active:scale-95 transition-all hover:border-[#a6857e]">
     🛠️
 </button>
+
+<!-- Private lesson notes modal -->
+<div id="lesson-notes-modal" class="notes-modal hidden" onclick="handleNotesModalBackdrop(event)">
+    <div class="notes-modal-content" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <h3 class="font-bold text-[#a6857e] uppercase text-xs tracking-widest">🔒 Privata lektionsanteckningar</h3>
+                <p id="notes-modal-lesson-name" class="text-sm text-gray-500 mt-1"></p>
+            </div>
+            <button onclick="closeNotesModal()" class="text-gray-400 hover:text-black font-bold text-xl leading-none">&times;</button>
+        </div>
+        <textarea id="private-notes-textarea" class="private-notes-area custom-scrollbar" placeholder="Skriv privata anteckningar för denna lektion... (syns bara för dig)"></textarea>
+        <div class="flex justify-between items-center mt-4">
+            <span class="text-[10px] text-gray-400 italic">🔒 Visas bara för läraren – ej i elevvy</span>
+            <button onclick="savePrivateNotes(); closeNotesModal();" class="bg-[#a6857e] text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-[#92756e] transition-all">Spara &amp; stäng</button>
+        </div>
+    </div>
+</div>
 
 <script>
 /* ================================================
@@ -192,6 +248,9 @@ let plannerData = JSON.parse(localStorage.getItem('teacher_planner_data')) || {}
 let timerInterval = null;
 let timerSeconds = 0;
 let timerMaxSeconds = 600;
+let stopwatchInterval = null;
+let stopwatchSeconds = 0;
+let stopwatchRunning = false;
 let isSplitActive = false;
 let currentFileHandle = null;
 
@@ -261,7 +320,7 @@ function weekHasLessons(weekKey) {
 
 function ensureWeekExists() {
     const weekKey = `${currentYear}-W${currentWeek}`;
-    if (weekHasCustomContent(weekKey)) return;
+    if (weekHasLessons(weekKey)) return;
     let sourceKey = null;
     for (let i = 1; i <= 52; i++) {
         let prevW = currentWeek - i;
@@ -531,6 +590,7 @@ function renderDayDetail() {
                     if (delBtn) delBtn.onmousedown = (e) => { e.stopPropagation(); wrapper.remove(); handleInput(); };
                 });
             });
+            updateNotesButtonState(lesson);
         }
     });
     if (lessons.length === 0) {
@@ -538,6 +598,7 @@ function renderDayDetail() {
         document.getElementById('sb-time').innerText = "Klicka på '+ Ny lektion' för att börja";
         document.getElementById('sb-plan').innerHTML = "";
         activeLessonId = null;
+        updateNotesButtonState(null);
     }
 }
 
@@ -619,6 +680,58 @@ function saveDayNote(dayIdx, value) {
     if (!plannerData[weekKey].dayNotes) plannerData[weekKey].dayNotes = ["", "", "", "", ""];
     plannerData[weekKey].dayNotes[dayIdx] = value;
     saveData(); // now async but fire-and-forget is fine
+}
+
+function toggleNotesModal() {
+    const modal = document.getElementById('lesson-notes-modal');
+    if (modal.classList.contains('hidden')) {
+        openNotesModal();
+    } else {
+        closeNotesModal();
+    }
+}
+
+function openNotesModal() {
+    if (!activeLessonId) return;
+    const weekKey = `${currentYear}-W${currentWeek}`;
+    const lesson = (plannerData[weekKey] && plannerData[weekKey].lessons[activeDayIndex] || []).find(l => l.id === activeLessonId);
+    if (!lesson) return;
+    document.getElementById('notes-modal-lesson-name').innerText = lesson.subject + ' – ' + lesson.time;
+    document.getElementById('private-notes-textarea').value = lesson.privateNotes || '';
+    document.getElementById('lesson-notes-modal').classList.remove('hidden');
+    document.getElementById('private-notes-textarea').focus();
+}
+
+function closeNotesModal() {
+    savePrivateNotes();
+    document.getElementById('lesson-notes-modal').classList.add('hidden');
+}
+
+function handleNotesModalBackdrop(event) {
+    if (event.target === document.getElementById('lesson-notes-modal')) {
+        closeNotesModal();
+    }
+}
+
+function savePrivateNotes() {
+    if (!activeLessonId) return;
+    const weekKey = `${currentYear}-W${currentWeek}`;
+    const lesson = (plannerData[weekKey] && plannerData[weekKey].lessons[activeDayIndex] || []).find(l => l.id === activeLessonId);
+    if (lesson) {
+        lesson.privateNotes = document.getElementById('private-notes-textarea').value;
+        saveData();
+        updateNotesButtonState(lesson);
+    }
+}
+
+function updateNotesButtonState(lesson) {
+    const notesBtn = document.getElementById('notes-btn');
+    if (!notesBtn) return;
+    if (lesson?.privateNotes?.trim()) {
+        notesBtn.classList.add('active');
+    } else {
+        notesBtn.classList.remove('active');
+    }
 }
 
 function addLessonPrompt() {
@@ -831,12 +944,16 @@ function openTool(type) {
     if (type === 'multiplication') { title.innerText = "Multiplikation"; content.innerHTML = generateMultiTable(); }
     else if (type === 'fractions') { title.innerText = "Bråkplank"; content.innerHTML = generateFractionBoard(); }
     else if (type === 'timer') { title.innerText = "Time Timer"; content.innerHTML = generateTimerUI(); setTimeout(initTimerFace, 10); resetTimer(); }
+    else if (type === 'stopwatch') { title.innerText = "Stoppur"; content.innerHTML = generateStopwatchUI(); resetStopwatch(); }
 }
 
 function closeTool() {
     document.getElementById('active-tool-container').classList.add('hidden-tool');
     clearInterval(timerInterval);
     timerInterval = null;
+    clearInterval(stopwatchInterval);
+    stopwatchInterval = null;
+    stopwatchRunning = false;
 }
 
 function generateMultiTable() {
@@ -923,6 +1040,52 @@ function polarToCartesian(cx, cy, r, angleDeg) {
     return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
 }
 
+function generateStopwatchUI() {
+    return `<div class="text-center p-2" style="min-width:220px">
+        <div id="sw-display" style="font-family:'Courier New',Courier,monospace;font-size:2.8rem;font-weight:bold;letter-spacing:0.08em;color:#374151;background:#f9fafb;border:2px solid #e5e7eb;border-radius:12px;padding:14px 20px;margin-bottom:18px;display:inline-block;min-width:210px;">00:00</div>
+        <div class="flex gap-2 justify-center">
+            <button id="sw-start-btn" onclick="startStopwatch()" style="background:#16a34a;color:white;padding:8px 20px;border-radius:8px;font-size:0.75rem;font-weight:700;border:none;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.15);transition:opacity 0.15s">Start</button>
+            <button onclick="pauseStopwatch()" style="background:#dc2626;color:white;padding:8px 20px;border-radius:8px;font-size:0.75rem;font-weight:700;border:none;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.15)">Paus</button>
+            <button onclick="resetStopwatch()" style="background:#a6857e;color:white;padding:8px 20px;border-radius:8px;font-size:0.75rem;font-weight:700;border:none;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.15)">Nollställ</button>
+        </div>
+    </div>`;
+}
+
+function startStopwatch() {
+    if (stopwatchRunning) return;
+    stopwatchRunning = true;
+    const btn = document.getElementById('sw-start-btn');
+    if (btn) { btn.style.opacity = '0.6'; btn.style.cursor = 'default'; }
+    const startTime = Date.now() - stopwatchSeconds * 1000;
+    stopwatchInterval = setInterval(() => {
+        stopwatchSeconds = Math.floor((Date.now() - startTime) / 1000);
+        updateStopwatchDisplay();
+    }, 1000);
+}
+
+function pauseStopwatch() {
+    if (!stopwatchRunning) return;
+    stopwatchRunning = false;
+    clearInterval(stopwatchInterval);
+    stopwatchInterval = null;
+    const btn = document.getElementById('sw-start-btn');
+    if (btn) { btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
+}
+
+function resetStopwatch() {
+    pauseStopwatch();
+    stopwatchSeconds = 0;
+    updateStopwatchDisplay();
+}
+
+function updateStopwatchDisplay() {
+    const display = document.getElementById('sw-display');
+    if (!display) return;
+    const mins = Math.floor(stopwatchSeconds / 60);
+    const secs = stopwatchSeconds % 60;
+    display.textContent = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+}
+
 /* ================================================
    10. CLOCK & FULLSCREEN
    ================================================ */
@@ -930,6 +1093,11 @@ function updateClock() {
     const now = new Date();
     const display = document.getElementById('digital-clock');
     if (display) display.innerText = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+}
+
+function toggleSidebar() {
+    const container = document.getElementById('view-day-detail');
+    container.classList.toggle('sidebar-hidden');
 }
 
 function toggleFullscreen() {
@@ -977,6 +1145,16 @@ window.onload = () => {
     document.getElementById('bottom-toolbar').style.display = 'none';
 
     updateFileStatus('localStorage (ingen diskfil kopplad)');
+
+    // Close lesson-notes modal on Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('lesson-notes-modal');
+            if (modal && !modal.classList.contains('hidden')) {
+                closeNotesModal();
+            }
+        }
+    });
 };
 </script>
 </body>
