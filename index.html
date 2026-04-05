@@ -1228,15 +1228,38 @@ function requestReminderPermission(dayIdx, btn) {
 const scheduledReminders = {};
 
 /**
+ * Clear all pending reminder timeouts for a specific day column.
+ */
+function clearRemindersForDay(dayIdx) {
+    const weekKey = `${currentYear}-W${currentWeek}`;
+    const prefix = `${weekKey}-${dayIdx}-`;
+    Object.keys(scheduledReminders).forEach(key => {
+        if (key.startsWith(prefix)) {
+            clearTimeout(scheduledReminders[key]);
+            delete scheduledReminders[key];
+        }
+    });
+}
+
+/**
  * Parse a notes string for lines starting with a time (HH:MM or H:MM),
- * schedule a notification at that time today (if it's in the future).
+ * schedule a notification at that exact time on the correct calendar day
+ * for the current week (based on dayIdx: 0=Mon, 1=Tue, …, 4=Fri).
  */
 function scheduleRemindersForDay(dayIdx, notesText) {
     if (Notification.permission !== 'granted') return;
 
+    // Clear all existing timers for this day before re-parsing
+    clearRemindersForDay(dayIdx);
+
     const timePattern = /^(\d{1,2}):(\d{2})\s*[-–]?\s*(.+)/;
     const lines = notesText.split('\n');
     const now = new Date();
+
+    // Calculate the actual calendar date for this day in the current week
+    const monday = getMonday(currentYear, currentWeek);
+    const targetDay = new Date(monday);
+    targetDay.setDate(monday.getDate() + dayIdx);
 
     lines.forEach(line => {
         const trimmed = line.trim();
@@ -1246,24 +1269,23 @@ function scheduleRemindersForDay(dayIdx, notesText) {
         const hour = parseInt(match[1], 10);
         const minute = parseInt(match[2], 10);
         const message = match[3].trim();
-        if (!message) return;
 
-        const key = `${dayIdx}-${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}-${message}`;
+        // Validate parsed values
+        if (!message || isNaN(hour) || isNaN(minute) || hour >= 24 || minute >= 60) return;
 
-        // Build a Date for this time today
-        const target = new Date();
+        // Key includes week so stale timers from other weeks don't collide
+        const weekKey = `${currentYear}-W${currentWeek}`;
+        const key = `${weekKey}-${dayIdx}-${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`;
+
+        // Build a Date for this time on the correct calendar day
+        const target = new Date(targetDay);
         target.setHours(hour, minute, 0, 0);
 
         const delay = target - now;
-        if (delay <= 0) return; // Time has already passed today
-
-        // Cancel previous timeout for same key if it exists
-        if (scheduledReminders[key]) {
-            clearTimeout(scheduledReminders[key]);
-        }
+        if (delay <= 0) return; // Time has already passed
 
         scheduledReminders[key] = setTimeout(() => {
-            fireNotification('⏰ Påminnelse', message);
+            fireNotification('⏰ Påminnelse', message, key);
             delete scheduledReminders[key];
         }, delay);
     });
@@ -1273,11 +1295,12 @@ function scheduleRemindersForDay(dayIdx, notesText) {
  * Send a notification via the Service Worker (so it works even when minimised)
  * or fall back to the Notification API directly.
  */
-function fireNotification(title, body) {
+function fireNotification(title, body, tag) {
+    const notifTag = tag || ('larar-reminder-' + Date.now());
     if (swRegistration && swRegistration.active) {
-        swRegistration.active.postMessage({ type: 'SHOW_NOTIFICATION', title, body });
+        swRegistration.active.postMessage({ type: 'SHOW_NOTIFICATION', title, body, tag: notifTag });
     } else if (Notification.permission === 'granted') {
-        new Notification(title, { body });
+        new Notification(title, { body, tag: notifTag });
     }
 }
 

@@ -44,13 +44,11 @@ self.addEventListener('fetch', event => {
 // ---- Message: receive scheduled alarm from the page ----
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
-    const { title, body } = event.data;
+    const { title, body, tag } = event.data;
     event.waitUntil(
       self.registration.showNotification(title, {
         body: body,
-        icon: './manifest.json', // fallback; replace with a real icon path if available
-        badge: './manifest.json',
-        tag: 'larar-reminder-' + Date.now(),
+        tag: tag || ('larar-reminder-' + Date.now()),
         requireInteraction: false,
         vibrate: [200, 100, 200]
       })
